@@ -92,6 +92,9 @@ def startup():
                       help='sort by timing [default]')
     parser.set_defaults(sort='t')
     (options, args) = parser.parse_args()
+    if len(args) == 0:
+        parser.print_help()
+        return
     a = []
     for file in args:
         a += analyze_logfile(file)
