@@ -2,7 +2,7 @@
 """:"
 exec python "$0" ${1+"$@"}
 """
-__doc__ = """A FORM profiler."""
+__doc__ = """A FORM log profiler."""
 
 import sys
 import re
@@ -62,18 +62,17 @@ def analyze_logfile(file):
                 nbytes = int(m.group(2))
                 if time + 1e-10 < old_time:
                     # the clock has been reset at .clear
-                    pass
-                else:
-                    a.append(type('', (), {
-                        'index': index,
-                        'expr': expr,
-                        'text': text,
-                        'time': time - old_time,
-                        'elapsed': time,
-                        'ngens': ngens,
-                        'nterms': nterms,
-                        'nbytes': nbytes
-                        })())
+                    old_time = 0
+                a.append(type('', (), {
+                    'index': index,
+                    'expr': expr,
+                    'text': text,
+                    'time': time - old_time,
+                    'elapsed': time,
+                    'ngens': ngens,
+                    'nterms': nterms,
+                    'nbytes': nbytes
+                    })())
                 step = 0
                 index += 1
                 old_time = time
