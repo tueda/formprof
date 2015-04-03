@@ -106,4 +106,7 @@ def startup():
     print_stat(a)
 
 if __name__ == '__main__':
-    startup()
+    try:
+        startup()
+    except BrokenPipeError:
+        pass
