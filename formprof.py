@@ -132,51 +132,57 @@ def analyze_logfile(file):
 
 def print_normal(stats):
     """Print statistics in the normal mode."""
+    total_time = stats[-1].end
+
     # Sort.
     stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
-    for s in stats:
-        s.elapsed = '{0:.2f}'.format(s.elapsed)
-        s.start = '{0:.2f}'.format(s.start)
-        s.end = '{0:.2f}'.format(s.end)
-        s.generated_terms = str(s.generated_terms)
-        s.terms_in_output = str(s.terms_in_output)
-        s.bytes_used = str(s.bytes_used)
+    stats = [(
+        s.name,
+        s.expr,
+        '{0:.2f}'.format(s.elapsed),
+        '{0:.2%}'.format(s.elapsed / total_time),
+        '{0:.2f}'.format(s.start),
+        '{0:.2f}'.format(s.end),
+        str(s.generated_terms),
+        str(s.terms_in_output),
+        str(s.bytes_used),
+    ) for s in stats]
 
     # Construct the format.
-    module_width = max(max(len(s.name) for s in stats), 8)
-    expr_width = max(max(len(s.expr) for s in stats), 8)
-    time_width = max(max(len(s.elapsed) for s in stats), 5)
-    start_width = max(max(len(s.start) for s in stats), 5)
-    end_width = max(max(len(s.end) for s in stats), 5)
-    genterms_width = max(max(len(s.generated_terms) for s in stats), 8)
-    outterms_width = max(max(len(s.terms_in_output) for s in stats), 8)
-    bytes_width = max(max(len(s.bytes_used) for s in stats), 5)
+    columns = [
+        'module  ',
+        'expr    ',
+        'time',
+        ' ',
+        'start',
+        'end',
+        'genterms',
+        'outterms',
+        'bytes',
+    ]
+
+    column_widths = [
+        max(max(len(s[i]) for s in stats), len(columns[i]))
+        for i in range(len(columns))
+    ]
 
     fmt = (
         '{{0:<{0}}}  {{1:<{1}}}  {{2:>{2}}}  {{3:>{3}}}  {{4:>{4}}}  '
-        '{{5:>{5}}}  {{6:>{6}}}  {{7:>{7}}}'
-    ).format(
-        module_width, expr_width, time_width, start_width, end_width,
-        genterms_width, outterms_width, bytes_width
-    )
+        '{{5:>{5}}}  {{6:>{6}}}  {{7:>{7}}}  {{8:>{8}}}'
+    ).format(*column_widths)
 
     # Print the result.
-    print(fmt.format(
-        'module', 'expr', 'time', 'start', 'end', 'genterms', 'outterms',
-        'bytes'
-    ))
-
+    print(fmt.format(*columns))
     for s in stats:
-        print(fmt.format(
-            s.name, s.expr, s.elapsed, s.start, s.end, s.generated_terms,
-            s.terms_in_output, s.bytes_used
-        ))
+        print(fmt.format(*s))
 
 
 def print_module(stats):
     """Print statistics combined for each module."""
+    total_time = stats[-1].end
+
     # Combine.
     new_stats = {}
     for s in stats:
@@ -196,34 +202,40 @@ def print_module(stats):
     stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
-    for s in stats:
-        s.count = str(s.count)
-        s.elapsed = '{0:.2f}'.format(s.elapsed)
+    stats = [(
+        s.name,
+        str(s.count),
+        '{0:.2f}'.format(s.elapsed),
+        '{0:.2%}'.format(s.elapsed / total_time),
+    ) for s in stats]
 
     # Construct the format.
-    module_width = max(max(len(s.name) for s in stats), 8)
-    count_width = max(max(len(s.count) for s in stats), 5)
-    time_width = max(max(len(s.elapsed) for s in stats), 5)
+    columns = [
+        'module  ',
+        'count',
+        'time',
+        ' ',
+    ]
+
+    column_widths = [
+        max(max(len(s[i]) for s in stats), len(columns[i]))
+        for i in range(len(columns))
+    ]
 
     fmt = (
-        '{{0:<{0}}}  {{1:<{1}}}  {{2:>{2}}}'
-    ).format(
-        module_width, count_width, time_width
-    )
+        '{{0:<{0}}}  {{1:>{1}}}  {{2:>{2}}}  {{3:>{3}}}'
+    ).format(*column_widths)
 
     # Print the result.
-    print(fmt.format(
-        'module', 'count', 'time'
-    ))
-
+    print(fmt.format(*columns))
     for s in stats:
-        print(fmt.format(
-            s.name, s.count, s.elapsed
-        ))
+        print(fmt.format(*s))
 
 
 def print_expr(stats):
     """Print statistics combined for each expression."""
+    total_time = stats[-1].end
+
     # Combine.
     new_stats = {}
     for s in stats:
@@ -243,30 +255,34 @@ def print_expr(stats):
     stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
-    for s in stats:
-        s.count = str(s.count)
-        s.elapsed = '{0:.2f}'.format(s.elapsed)
+    stats = [(
+        s.expr,
+        str(s.count),
+        '{0:.2f}'.format(s.elapsed),
+        '{0:.2%}'.format(s.elapsed / total_time),
+    ) for s in stats]
 
     # Construct the format.
-    expr_width = max(max(len(s.expr) for s in stats), 8)
-    count_width = max(max(len(s.count) for s in stats), 5)
-    time_width = max(max(len(s.elapsed) for s in stats), 5)
+    columns = [
+        'expr    ',
+        'count',
+        'time',
+        ' ',
+    ]
+
+    column_widths = [
+        max(max(len(s[i]) for s in stats), len(columns[i]))
+        for i in range(len(columns))
+    ]
 
     fmt = (
-        '{{0:<{0}}}  {{1:<{1}}}  {{2:>{2}}}'
-    ).format(
-        expr_width, count_width, time_width
-    )
+        '{{0:<{0}}}  {{1:>{1}}}  {{2:>{2}}}  {{3:>{3}}}'
+    ).format(*column_widths)
 
     # Print the result.
-    print(fmt.format(
-        'expr', 'count', 'time'
-    ))
-
+    print(fmt.format(*columns))
     for s in stats:
-        print(fmt.format(
-            s.expr, s.count, s.elapsed
-        ))
+        print(fmt.format(*s))
 
 
 def main():
