@@ -295,6 +295,7 @@ def main():
     # Parse the log file.
     stats = list(analyze_logfile(args.logfile))
     if not stats:
+        print('empty log', file=sys.stderr)
         return
 
     # Print statistics.
