@@ -130,12 +130,13 @@ def analyze_logfile(file):
                 yield stat
 
 
-def print_normal(stats):
+def print_normal(stats, sort):
     """Print statistics in the normal mode."""
     total_time = stats[-1].end
 
     # Sort.
-    stats.sort(key=lambda s: -s.elapsed)
+    if sort:
+        stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
     stats = [(
@@ -179,7 +180,7 @@ def print_normal(stats):
         print(fmt.format(*s))
 
 
-def print_module(stats):
+def print_module(stats, sort):
     """Print statistics combined for each module."""
     total_time = stats[-1].end
 
@@ -199,7 +200,8 @@ def print_module(stats):
     stats = list(new_stats.values())
 
     # Sort.
-    stats.sort(key=lambda s: -s.elapsed)
+    if sort:
+        stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
     stats = [(
@@ -232,7 +234,7 @@ def print_module(stats):
         print(fmt.format(*s))
 
 
-def print_expr(stats):
+def print_expr(stats, sort):
     """Print statistics combined for each expression."""
     total_time = stats[-1].end
 
@@ -252,7 +254,8 @@ def print_expr(stats):
     stats = list(new_stats.values())
 
     # Sort.
-    stats.sort(key=lambda s: -s.elapsed)
+    if sort:
+        stats.sort(key=lambda s: -s.elapsed)
 
     # Stringification.
     stats = [(
@@ -299,13 +302,27 @@ def main():
     parser.add_argument('-m',
                         '--module',
                         action='store_const',
-                        const=True,
-                        help='print statistics combined for each module')
+                        const='module',
+                        dest='mode',
+                        help='combine statistics for each module')
     parser.add_argument('-e',
                         '--expr',
                         action='store_const',
+                        const='expr',
+                        dest='mode',
+                        help='combine statistics for each expression')
+    parser.add_argument('-s',
+                        '--sort',
+                        action='store_const',
                         const=True,
-                        help='print statistics combined for each expression')
+                        default=True,
+                        help='sort by time (default)')
+    parser.add_argument('-u',
+                        '--unsort',
+                        action='store_const',
+                        const=False,
+                        dest='sort',
+                        help='do not sort')
     args = parser.parse_args()
 
     # Parse the log file.
@@ -315,12 +332,12 @@ def main():
         return
 
     # Print statistics.
-    if args.module:
-        print_module(stats)
-    elif args.expr:
-        print_expr(stats)
+    if args.mode == 'module':
+        print_module(stats, args.sort)
+    elif args.mode == 'expr':
+        print_expr(stats, args.sort)
     else:
-        print_normal(stats)
+        print_normal(stats, args.sort)
 
 
 if __name__ == '__main__':
