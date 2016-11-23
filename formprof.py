@@ -7,6 +7,7 @@ exec python "$0" "$@"
 from __future__ import print_function
 
 import argparse
+import copy
 import re
 import sys
 
@@ -43,16 +44,63 @@ class Stat(object):
         'generated_terms',  # number of generated terms (int)
         'terms_in_output',  # number of terms in output (int)
         'bytes_used',       # number of bytes used in output (int)
+        'parent',           # parent node (Stat)
+        'children',         # child nodes (List[Stat])
     )
+
+    def add_child(self, node):
+        """Add a child node."""
+        if getattr(node, 'parent', None):
+            raise RuntimeError('the node already has a parent.')
+
+        n = getattr(self, 'parent', None)
+        while n:
+            if n == node:
+                raise RuntimeError('tried to add an ancestor as a child')
+            n = n.parent
+
+        if not getattr(self, 'children', None):
+            if hasattr(self, 'start'):
+                # Convert this object from a leaf to a node.
+                s = copy.copy(self)
+                if not hasattr(self, 'parent'):
+                    self.parent = None
+                self.children = []
+                self.children.append(s)
+                s.parent = self
+                s.children = []
+                for a in self.__slots__:
+                    if a not in ('name', 'elapsed', 'count',
+                                 'parent', 'children'):
+                        if hasattr(self, a):
+                            delattr(self, a)
+            else:
+                if not hasattr(self, 'parent'):
+                    self.parent = None
+                self.children = []
+
+        self.children.append(node)
+        node.parent = self
+        if not hasattr(node, 'children'):
+            node.children = []
+
+        # Add the elapsed time and count to this node and ancestors.
+        n = self
+        while n:
+            n.elapsed += node.elapsed
+            n.count += node.count
+            n = n.parent
 
     def __str__(self):
         """Return the string representation."""
-        fmt = ('[Stat name={0}, expr={1}, start={2}, end={3}, elapsed={4}, '
-               'count={5}, generated_terms={6}, terms_in_output={7}, '
-               'bytes_used={8}]')
-        return fmt.format(self.name, self.expr, self.start, self.end,
-                          self.elapsed, self.count, self.generated_terms,
-                          self.terms_in_output, self.bytes_used)
+        items = []
+        for a in self.__slots__:
+            if hasattr(self, a):
+                items.append('{0}={1}'.format(a, getattr(self, a)))
+        return '[Stat{0}{1}]'.format(
+            ' ' if items else '',
+            ', '.join(items),
+        )
 
 
 def analyze_logfile(file):
@@ -185,7 +233,7 @@ def print_module(stats, sort):
     total_time = stats[-1].end
 
     # Combine.
-    new_stats = {}
+    new_stats = {}  # str -> Stat
     for s in stats:
         if s.name not in new_stats:
             t = Stat()
@@ -229,7 +277,7 @@ def print_module(stats, sort):
     ).format(*column_widths)
 
     # Print the result.
-    print(fmt.format(*columns))
+    print(fmt.format(*columns).rstrip())
     for s in stats:
         print(fmt.format(*s))
 
@@ -239,7 +287,7 @@ def print_expr(stats, sort):
     total_time = stats[-1].end
 
     # Combine.
-    new_stats = {}
+    new_stats = {}  # str -> Stat
     for s in stats:
         if s.expr not in new_stats:
             t = Stat()
@@ -283,6 +331,134 @@ def print_expr(stats, sort):
     ).format(*column_widths)
 
     # Print the result.
+    print(fmt.format(*columns).rstrip())
+    for s in stats:
+        print(fmt.format(*s))
+
+
+def print_tree(stats, sort):
+    """Print statistics combined for each module (tree-like)."""
+    total_time = stats[-1].end
+
+    # Construct the tree. Each node is determined from the module name,
+    # separated by '-'. For example,
+    #   MyModule-1
+    #   MyModule-2-a
+    #   MyModule-2-b
+    #   MyModule-3
+    #   MyModule-3-a
+    # are converted as
+    #   MyModule*
+    #   +- MyModule-1
+    #   +- MyModule-2*
+    #   |  +- MyModule-2-a
+    #   |  +- MyModule-2-b
+    #   +- MyModule-3*
+    #      +- MyModule-3
+    #      +- MyModule-3-a
+    root = Stat()
+    root.name = '*'
+    root.elapsed = 0.0
+    root.count = 0
+    nodes = {}  # str -> Stat
+    for s in stats:
+        names = s.name.split('-')
+        names = ['-'.join(names[:i + 1]) for i in range(len(names))]
+        n = root
+        for name in names:
+            if name not in nodes:
+                new_node = Stat()
+                new_node.name = name + '*'
+                new_node.elapsed = 0.0
+                new_node.count = 0
+                nodes[name] = new_node
+                n.add_child(new_node)
+            n = nodes[name]
+        n.add_child(s)
+
+    # Sort.
+    def sort_tree(node):
+        node.children.sort(key=lambda s: -s.elapsed)
+        for n in node.children:
+            sort_tree(n)
+
+    if sort:
+        sort_tree(root)
+
+    # Stringification.
+    stats = []
+
+    def walk_tree(node, indent_str, last):
+        if len(node.children) == 1:
+            walk_tree(node.children[0], indent_str, last)
+            return
+
+        s = node
+        ss = indent_str + ('+- ' if node != root else '') + s.name
+
+        if hasattr(node, 'start'):
+            stats.append([
+                ss,
+                s.expr,
+                '',
+                '{0:.2f}'.format(s.elapsed),
+                '{0:.2%}'.format(s.elapsed / total_time),
+                '{0:.2f}'.format(s.start),
+                '{0:.2f}'.format(s.end),
+                str(s.generated_terms),
+                str(s.terms_in_output),
+                str(s.bytes_used),
+            ])
+        else:
+            stats.append([
+                ss,
+                '',
+                str(s.count),
+                '{0:.2f}'.format(s.elapsed),
+                '{0:.2%}'.format(s.elapsed / total_time),
+                '',
+                '',
+                '',
+                '',
+                ''
+            ])
+
+        if node != root:
+            if (last):
+                indent_str += '  '
+            else:
+                indent_str += '| '
+
+        for n in node.children:
+            walk_tree(n, indent_str, n == node.children[-1])
+
+    walk_tree(root, '', True)
+
+    # Construct the format.
+    columns = [
+        'module  ',
+        'expr    ',
+        'count',
+        'time',
+        ' ',
+        'start',
+        'end',
+        'genterms',
+        'outterms',
+        'bytes',
+    ]
+
+    column_widths = [
+        max(max(len(s[i]) for s in stats), len(columns[i]))
+        for i in range(len(columns))
+    ]
+
+    fmt = (
+        '{{0:<{0}}}  {{1:<{1}}}  {{2:>{2}}}  {{3:>{3}}}  {{4:>{4}}}  '
+        '{{5:>{5}}}  {{6:>{6}}}  {{7:>{7}}}  {{8:>{8}}}  {{9:>{9}}}'
+    ).format(*column_widths)
+
+    # Print the result.
     print(fmt.format(*columns))
     for s in stats:
         print(fmt.format(*s))
@@ -299,6 +475,12 @@ def main():
                         type=str,
                         metavar='LOGFILE',
                         help='log file to be analyzed')
+    parser.add_argument('-t',
+                        '--tree',
+                        action='store_const',
+                        const='tree',
+                        dest='mode',
+                        help='combine statistics for each module (tree-like)')
     parser.add_argument('-m',
                         '--module',
                         action='store_const',
@@ -332,7 +514,9 @@ def main():
         return
 
     # Print statistics.
-    if args.mode == 'module':
+    if args.mode == 'tree':
+        print_tree(stats, args.sort)
+    elif args.mode == 'module':
         print_module(stats, args.sort)
     elif args.mode == 'expr':
         print_expr(stats, args.sort)
