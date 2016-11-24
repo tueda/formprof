@@ -14,15 +14,18 @@ import sys
 __doc__ = """\
 FORM log profiler.
 
+Example
+-------
+$ formprof.py myformprogram.log
+$ formprof.py -u myformprogram.log
+$ formprof.py -t myformprogram.log
+$ formprof.py -m myformprogram.log
+$ formprof.py -e myformprogram.log
+
 Python versions
 ---------------
 2.7, 3.2, 3.3, 3.4, 3.5
 
-Example
--------
-$ formprof.py myformprogram.log
-$ formprof.py -m myformprogram.log
-$ formprof.py -e myformprogram.log
 """
 
 if sys.version_info[0] >= 3:
@@ -461,7 +464,7 @@ def print_tree(stats, sort):
     # Print the result.
     print(fmt.format(*columns))
     for s in stats:
-        print(fmt.format(*s))
+        print(fmt.format(*s).rstrip())
 
 
 def main():
