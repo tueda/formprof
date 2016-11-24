@@ -51,47 +51,67 @@ class Stat(object):
         'children',         # child nodes (List[Stat])
     )
 
-    def add_child(self, node):
-        """Add a child node."""
-        if getattr(node, 'parent', None):
-            raise RuntimeError('the node already has a parent.')
+    def is_leaf(self):
+        """Return True if the object is a leaf."""
+        # A node has one or more module statistics information, so `start` and
+        # `end` are useless.
+        return hasattr(self, 'start')
+
+    def add_child(self, other):
+        """Add a child item."""
+        if not isinstance(other, Stat):
+            raise TypeError('the object is not "Stat"')
+
+        if getattr(other, 'parent', None):
+            raise ValueError('the object already has a parent.')
 
         n = getattr(self, 'parent', None)
         while n:
-            if n == node:
-                raise RuntimeError('tried to add an ancestor as a child')
+            if n == other:
+                raise ValueError('tried to add an ancestor as a child')
             n = n.parent
 
-        if not getattr(self, 'children', None):
-            if hasattr(self, 'start'):
+        # NOTE: objects in a tree must have the attributes `parent`,
+        #       `children`, `elapsed` and `count`, and most likely have `name`.
+
+        if not hasattr(self, 'children'):
+            if self.is_leaf():
                 # Convert this object from a leaf to a node.
                 s = copy.copy(self)
-                if not hasattr(self, 'parent'):
-                    self.parent = None
                 self.children = []
                 self.children.append(s)
                 s.parent = self
                 s.children = []
                 for a in self.__slots__:
-                    if a not in ('name', 'elapsed', 'count',
-                                 'parent', 'children'):
+                    if a not in ('name', 'elapsed', 'count', 'parent',
+                                 'children'):
                         if hasattr(self, a):
                             delattr(self, a)
             else:
-                if not hasattr(self, 'parent'):
-                    self.parent = None
                 self.children = []
 
-        self.children.append(node)
-        node.parent = self
-        if not hasattr(node, 'children'):
-            node.children = []
+        if not hasattr(self, 'parent'):
+            self.parent = None
+
+        self.children.append(other)
+        other.parent = self
+        if not hasattr(other, 'children'):
+            other.children = []
+
+        if not hasattr(self, 'elapsed'):
+            self.elapsed = 0.0
+        if not hasattr(self, 'count'):
+            self.count = 0
+        if not hasattr(other, 'elapsed'):
+            other.elapsed = 0.0
+        if not hasattr(other, 'count'):
+            other.count = 0
 
         # Add the elapsed time and count to this node and ancestors.
         n = self
         while n:
-            n.elapsed += node.elapsed
-            n.count += node.count
+            n.elapsed += other.elapsed
+            n.count += other.count
             n = n.parent
 
     def __str__(self):
@@ -361,8 +381,6 @@ def print_tree(stats, sort):
     #      +- MyModule-3-a
     root = Stat()
     root.name = '*'
-    root.elapsed = 0.0
-    root.count = 0
     nodes = {}  # str -> Stat
     for s in stats:
         names = s.name.split('-')
@@ -372,8 +390,6 @@ def print_tree(stats, sort):
             if name not in nodes:
                 new_node = Stat()
                 new_node.name = name + '*'
-                new_node.elapsed = 0.0
-                new_node.count = 0
                 nodes[name] = new_node
                 n.add_child(new_node)
             n = nodes[name]
@@ -399,7 +415,7 @@ def print_tree(stats, sort):
         s = node
         ss = indent_str + ('+- ' if node != root else '') + s.name
 
-        if hasattr(node, 'start'):
+        if node.is_leaf():
             stats.append([
                 ss,
                 s.expr,
